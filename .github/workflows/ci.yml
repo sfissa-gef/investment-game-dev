@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, app-game-gef-production]
+  pull_request:
+    branches: [main]
+
+jobs:
+  app-tests:
+    name: PWA — tests + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: investment-game
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: investment-game/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  server-smoke:
+    name: Sync server — module import smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: investment-game-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: investment-game-server/package-lock.json
+      - run: npm ci
+      - name: Import smoke test
+        run: node -e "import('./src/schemas.js').then(()=>console.log('schemas OK')); import('./src/db.js').then(()=>console.log('db OK'))"

@@ -1,0 +1,21 @@
+{
+  "name": "investment-game-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
+    "migrate:down": "node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "^4.21.1",
+    "pg": "^8.13.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "node-pg-migrate": "^7.9.1"
+  }
+}

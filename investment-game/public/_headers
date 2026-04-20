@@ -1,0 +1,20 @@
+# Cloudflare Pages headers file.
+# Assets with content-hashed filenames can be cached aggressively.
+# HTML + the Service Worker itself must NOT be long-cached, otherwise users
+# keep the old app even after a fresh deploy.
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+  Service-Worker-Allowed: /
+
+/sw.js
+  Cache-Control: no-cache, must-revalidate
+
+/manifest.webmanifest
+  Cache-Control: no-cache, must-revalidate
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/icons/*
+  Cache-Control: public, max-age=31536000
