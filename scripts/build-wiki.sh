@@ -2,15 +2,17 @@
 # Build GitHub Wiki content from docs/ into a target directory.
 #
 # Usage:
-#   ./scripts/build-wiki.sh [target-dir]
+#   ./scripts/build-wiki.sh [target-dir]     # raw — just generates pages
+#   make wiki                                # generates into ../investment-game.wiki
+#   make wiki-push                           # generates + commits + pushes
 #
-# Default target: /tmp/wiki-staging
-# Typical workflow to push to GitHub Wiki:
-#   1) On GitHub UI, create the first wiki page (any title, any content)
-#      so the wiki repo exists.
-#   2) Clone it:   git clone git@github.com:sfissa-gef/investment-game.wiki.git
-#   3) Run:        ./scripts/build-wiki.sh /path/to/investment-game.wiki
-#   4) cd into the wiki clone, commit + push.
+# First-time setup (once per fresh clone of the main repo):
+#   1) Ensure the wiki exists on GitHub — click "Wiki" tab, create any first page.
+#   2) git clone git@github.com:sfissa-gef/investment-game.wiki.git \
+#        ../investment-game.wiki
+#   3) make wiki-push
+#
+# Default target: /tmp/wiki-staging (just for previewing).
 
 set -euo pipefail
 

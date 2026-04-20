@@ -34,7 +34,19 @@ Deployed on Android tablets to ~3,200 participants across rural Zambia and Ugand
 
 ## Quick start
 
-### Run the PWA locally
+A top-level [Makefile](Makefile) wraps the common tasks:
+
+```bash
+make help           # list all targets
+make dev            # PWA dev server on :5173
+make test           # 47 tests
+make build          # production PWA build
+make deploy         # build + push to Cloudflare Pages production
+make wiki-push      # sync docs/ → GitHub Wiki and push
+make server         # local Postgres + backend via docker compose
+```
+
+### Run the PWA locally (raw)
 
 ```bash
 cd investment-game
