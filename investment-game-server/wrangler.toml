@@ -1,0 +1,16 @@
+name = "investment-game-server"
+main = "src/index.js"
+compatibility_date = "2026-04-20"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers-level env. Secrets (DATABASE_URL, ENUMERATOR_TOKENS, ADMIN_TOKEN)
+# are set separately via `wrangler secret put <NAME>` — never here.
+[vars]
+
+# Uncomment + customize once you own a custom hostname:
+# routes = [
+#   { pattern = "api.investment-game.cgiar.org", custom_domain = true }
+# ]
+
+[observability]
+enabled = true

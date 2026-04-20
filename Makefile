@@ -8,7 +8,7 @@ APP_DIR  := investment-game
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev test build deploy wiki wiki-push server
+.PHONY: help dev test build deploy wiki wiki-push server-dev server-deploy server-migrate server-tail
 
 help:
 	@echo ""
@@ -21,7 +21,10 @@ help:
 	@echo "                    (default: ../investment-game.wiki)"
 	@echo "  make wiki-push    Regenerate + commit + push to GitHub Wiki"
 	@echo ""
-	@echo "  make server       Start local sync backend via docker compose"
+	@echo "  make server-dev     Start sync backend locally (wrangler dev)"
+	@echo "  make server-deploy  Deploy sync backend to Cloudflare Workers"
+	@echo "  make server-migrate Apply schema migrations to Neon (needs .env)"
+	@echo "  make server-tail    Stream live logs from deployed Worker"
 	@echo ""
 
 dev:
@@ -52,5 +55,14 @@ wiki-push: wiki
 	    echo "✓ wiki pushed"; \
 	  fi
 
-server:
-	cd investment-game-server && docker compose up -d && docker compose exec app npm run migrate
+server-dev:
+	cd investment-game-server && npx wrangler dev
+
+server-deploy:
+	cd investment-game-server && npx wrangler deploy
+
+server-migrate:
+	cd investment-game-server && npm run migrate
+
+server-tail:
+	cd investment-game-server && npx wrangler tail

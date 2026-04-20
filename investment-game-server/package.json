@@ -1,21 +1,25 @@
 {
   "name": "investment-game-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "description": "Cloudflare Worker + Neon Postgres sync backend for the Investment Game PWA",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
     "migrate": "node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",
     "test": "node --test test/"
   },
   "dependencies": {
-    "express": "^4.21.1",
-    "pg": "^8.13.1",
+    "@neondatabase/serverless": "^0.10.4",
+    "hono": "^4.6.14",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "node-pg-migrate": "^7.9.1"
+    "node-pg-migrate": "^7.9.1",
+    "pg": "^8.13.1",
+    "wrangler": "^3.100.0"
   }
 }

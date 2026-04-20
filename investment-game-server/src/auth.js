@@ -1,30 +1,37 @@
-// Simple static-bearer auth. ENUMERATOR_TOKENS and ADMIN_TOKEN are env-provided.
-// ENUMERATOR_TOKENS is a comma-separated list.
+// Bearer-token auth middleware for Hono.
+// Tokens are read from Worker secrets at request time, not module load,
+// because env bindings aren't available until the request context.
 
-const enumeratorTokens = new Set(
-  (process.env.ENUMERATOR_TOKENS || '').split(',').map((s) => s.trim()).filter(Boolean)
-);
-const adminToken = process.env.ADMIN_TOKEN || '';
-
-function extract(req) {
-  const header = req.headers.authorization || '';
+function extract(c) {
+  const header = c.req.header('authorization') || '';
   const [scheme, token] = header.split(' ');
   if (scheme !== 'Bearer' || !token) return null;
   return token;
 }
 
-export function requireEnumerator(req, res, next) {
-  const token = extract(req);
-  if (!token) return res.status(401).json({ error: 'missing_token' });
-  if (!enumeratorTokens.has(token) && token !== adminToken) {
-    return res.status(403).json({ error: 'forbidden' });
-  }
-  next();
+export function requireEnumerator() {
+  return async (c, next) => {
+    const token = extract(c);
+    if (!token) return c.json({ error: 'missing_token' }, 401);
+
+    const valid = new Set(
+      (c.env.ENUMERATOR_TOKENS || '').split(',').map((s) => s.trim()).filter(Boolean)
+    );
+    const admin = c.env.ADMIN_TOKEN || '';
+    if (!valid.has(token) && token !== admin) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    await next();
+  };
 }
 
-export function requireAdmin(req, res, next) {
-  const token = extract(req);
-  if (!token) return res.status(401).json({ error: 'missing_token' });
-  if (token !== adminToken) return res.status(403).json({ error: 'admin_only' });
-  next();
+export function requireAdmin() {
+  return async (c, next) => {
+    const token = extract(c);
+    if (!token) return c.json({ error: 'missing_token' }, 401);
+    if (token !== (c.env.ADMIN_TOKEN || '')) {
+      return c.json({ error: 'admin_only' }, 403);
+    }
+    await next();
+  };
 }

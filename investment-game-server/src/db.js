@@ -1,32 +1,11 @@
-import pg from 'pg';
+import { neon } from '@neondatabase/serverless';
 
-const { Pool } = pg;
-
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: Number(process.env.PG_POOL_MAX ?? 10),
-});
-
-export async function query(text, params) {
-  const client = await pool.connect();
-  try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
+// Returns a tagged-template SQL client bound to the Worker's DATABASE_URL secret.
+// Each call opens a short-lived HTTP connection to Neon's pooler — no TCP,
+// no persistent sockets (that's why this works in a Worker runtime).
+export function getDb(env) {
+  if (!env?.DATABASE_URL) {
+    throw new Error('DATABASE_URL secret is not configured. Run: wrangler secret put DATABASE_URL');
   }
-}
-
-export async function withTx(fn) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  return neon(env.DATABASE_URL);
 }

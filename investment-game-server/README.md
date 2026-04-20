@@ -1,52 +1,130 @@
 # investment-game-server
 
-Minimal Node + Express + PostgreSQL sync endpoint for the Investment Game PWA.
+Sync backend for the Investment Game PWA. Runs on **Cloudflare Workers** with **Neon Postgres** — fully managed, serverless, scales to zero when idle.
 
-## Quick start (local)
+## Architecture
 
-```bash
-cp .env.example .env   # edit if you want non-default tokens
-docker compose up -d db
-npm install
-DATABASE_URL=postgresql://game:devpass@localhost:5432/investment_game npm run migrate
-DATABASE_URL=postgresql://game:devpass@localhost:5432/investment_game \
-  ENUMERATOR_TOKENS=dev-enum-token \
-  ADMIN_TOKEN=dev-admin-token \
-  npm run dev
 ```
-
-Then `curl http://localhost:4000/health` should return `{ ok: true, time: ... }`.
-
-## Production (single VM)
-
-```bash
-ADMIN_TOKEN=$(openssl rand -hex 32) \
-ENUMERATOR_TOKENS=$(openssl rand -hex 16),$(openssl rand -hex 16) \
-POSTGRES_PASSWORD=$(openssl rand -hex 24) \
-docker compose up -d --build
-docker compose exec app npm run migrate
+Tablet (PWA)
+   │ HTTPS POST /api/sessions  (Bearer token)
+   ▼
+Cloudflare Workers  (Hono router, 300+ edge locations)
+   │
+   ▼
+Neon Postgres  (serverless, HTTP/WebSocket driver)
 ```
-
-Point the PWA's Admin → Sync tab at `https://<host>`. Use one `ENUMERATOR_TOKENS` entry per device team; rotate on schedule.
 
 ## Endpoints
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/health` | — | Liveness probe (checks DB) |
-| POST | `/api/sessions` | Enumerator | Upload a completed session (idempotent via `sessionId`). Returns 200 on accept, 409 on duplicate |
-| POST | `/api/audio-chunks` | Enumerator | Upload one encrypted audio chunk |
-| GET | `/api/sessions` | Admin | List 500 most recent received sessions |
-| GET | `/api/sessions/:id` | Admin | Return the stored payload for a session |
+| GET | `/health` | — | Liveness (pings DB) |
+| POST | `/api/sessions` | Enumerator | Upload a completed session. Idempotent on `sessionId`. 200 → accepted, 409 → already synced |
+| POST | `/api/audio-chunks` | Enumerator | Upload one encrypted Opus chunk |
+| GET | `/api/sessions` | Admin | List most-recent 500 sessions |
+| GET | `/api/sessions/:id` | Admin | Return a stored session payload |
 
-## Data model
+## One-time setup
 
-One `sessions` row per session holds the full JSON payload in a `jsonb` column plus hot columns indexed for queries. One `audio_chunks` row per 60-second chunk. Chunks are stored encrypted (`encrypted = true`) when the client uploaded AES-GCM ciphertext.
+### 1. Create the Neon database
 
-## Backup
+1. Sign up at [neon.tech](https://neon.tech). Free tier: 0.5 GB + 300 compute-hours/month (way more than this project needs).
+2. Create a project named `investment-game`. Pick the region closest to your participants (e.g., `eu-central-1` for Africa).
+3. Dashboard → Connection Details → copy the **pooled connection string** (looks like `postgresql://user:pass@ep-xxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require`).
+
+### 2. Run migrations from your laptop
+
+Migrations can't run inside a Worker (no long-running processes). Run them once from your machine:
 
 ```bash
-docker compose exec db pg_dump -U game investment_game > backup-$(date -u +%Y%m%d).sql
+cd investment-game-server
+npm install
+cp .env.example .env
+# edit .env: paste your Neon pooled connection string
+
+npm run migrate
+# → applies migrations/1700000000000_init.cjs
+# → creates sessions + audio_chunks tables
 ```
 
-Schedule via cron; push to S3-compatible storage. Retention per IRB protocol.
+### 3. Configure the Worker
+
+```bash
+# authenticate (opens browser; one-time)
+npx wrangler login
+
+# generate bearer tokens
+export ENUM_TOK=$(openssl rand -hex 16)
+export ADMIN_TOK=$(openssl rand -hex 32)
+
+# push secrets to Cloudflare (they live encrypted; not in any repo file)
+echo "$(cat .env | grep DATABASE_URL | cut -d= -f2-)" | npx wrangler secret put DATABASE_URL
+echo "$ENUM_TOK" | npx wrangler secret put ENUMERATOR_TOKENS
+echo "$ADMIN_TOK" | npx wrangler secret put ADMIN_TOKEN
+
+echo "Your enumerator token (paste into PWA Admin → Sync → Bearer token):"
+echo "  $ENUM_TOK"
+echo "Your admin token (keep private, used for /api/sessions read access):"
+echo "  $ADMIN_TOK"
+```
+
+### 4. Deploy
+
+```bash
+npm run deploy
+# → https://investment-game-server.<your-account>.workers.dev
+```
+
+### 5. Point the PWA at the Worker
+
+In the deployed PWA, open the Admin panel → Sync tab:
+- **Server URL**: `https://investment-game-server.<your-account>.workers.dev`
+- **Bearer token**: the enumerator token from step 3
+- Save → Test connection → should show "Connected (200)".
+
+## Local dev
+
+```bash
+npm run dev
+# → http://localhost:8787
+# Secrets read from .dev.vars (gitignored). Create it:
+cat > .dev.vars <<EOF
+DATABASE_URL=postgresql://...neon.tech/...
+ENUMERATOR_TOKENS=dev-enum-token
+ADMIN_TOKEN=dev-admin-token
+EOF
+```
+
+Wrangler emulates the Workers runtime. `curl http://localhost:8787/health` should return `{ ok: true }`.
+
+## Monitoring
+
+```bash
+npm run tail      # live logs streamed from the production Worker
+```
+
+Cloudflare dashboard → Workers → `investment-game-server` → Observability has request counts, error rates, CPU time histograms.
+
+## Updating the schema
+
+Add a new file to `migrations/` (timestamp-prefixed), then `npm run migrate` from your laptop. The Worker code can pick up new columns immediately after its next deploy.
+
+## Costs
+
+| Service | Free tier | Expected use | Paid if? |
+|---|---|---|---|
+| Cloudflare Workers | 100k requests/day | ~20k total across 3,200 sessions | Over 100k/day |
+| Neon Postgres | 0.5 GB storage, 300 compute-hours/mo | ~30 MB, ~5 hrs compute | Very unlikely to hit |
+
+Realistically this stays free for the entire study.
+
+## Backups
+
+Neon runs automatic backups with point-in-time restore (24 hours on free tier, longer on paid). For analysis-grade archival:
+
+```bash
+# from your laptop, using the DATABASE_URL
+pg_dump "$DATABASE_URL" > backup-$(date -u +%Y%m%d).sql
+```
+
+Schedule as a cron, push to S3-compatible storage or a secure local server. Retain per IRB protocol.
