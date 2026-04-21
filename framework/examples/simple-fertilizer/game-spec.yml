@@ -1,0 +1,61 @@
+# Simple Fertilizer Demo
+#
+# Stress-test the schema: can it describe a minimal study that differs from
+# the reference one along every major axis?
+#   - 1 round instead of 3 (no practice, no treatment arms)
+#   - budget = 20 not 25
+#   - fertilizer max = 15 not 10
+#   - fertilizer multiplier = 3× not 2×
+#   - weather = 70/30 not 80/20
+#   - no seeds, no insurance, no bundle, no video offer, no survey
+#
+# If the validator accepts both this AND zm-ug-investment, the schema is at
+# least not wedded to the reference study's exact shape.
+
+apiVersion: game-spec/v1
+
+metadata:
+  studyId: simple-fertilizer-demo
+  name: "Simple Fertilizer Demo"
+  countries: [XX]        # placeholder — real studies list actual ISO codes
+  languages: [en]
+  defaultLanguage: en
+
+constants:
+  budgetPerRound: 20
+
+resources:
+  fertilizer:
+    kind: stepper
+    min: 0
+    max: 15
+    pricePerUnit: 1
+
+weather:
+  outcomes: [good, bad]
+  probabilities: { good: 0.70, bad: 0.30 }
+  seedPerRound: true
+
+payoutFormulas:
+  fertilizerHarvest: "fertilizer * (weather == 'good' ? 3 : 0)"
+
+rounds:
+  - id: round1
+    countsTowardPayment: true
+    decisions: [fertilizer]
+    payouts:
+      savings:           "budgetPerRound - fertilizer"
+      fertilizerHarvest: "fertilizerHarvest"
+      totalTokens:       "savings + fertilizerHarvest"
+
+instructions:
+  sequence: [intro, rules]
+
+survey:
+  questions: []
+
+branding:
+  primaryColor: "#0066cc"
+
+narrationDir: "./narration"
+i18nDir:      "./i18n"

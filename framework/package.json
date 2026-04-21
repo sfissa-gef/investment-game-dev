@@ -1,0 +1,20 @@
+{
+  "name": "investment-game-framework",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "description": "Spec-driven framework for running Investment-Game-style lab-in-the-field experiments. See framework/README.md.",
+  "bin": {
+    "game-spec-validate": "./schema/validator.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "validate:zm-ug": "node schema/validator.mjs examples/zm-ug-investment/game-spec.yml",
+    "validate:simple": "node schema/validator.mjs examples/simple-fertilizer/game-spec.yml",
+    "validate:all": "npm run validate:zm-ug && npm run validate:simple"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1",
+    "zod": "^3.23.8"
+  }
+}
