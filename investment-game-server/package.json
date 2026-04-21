@@ -10,11 +10,12 @@
     "tail": "wrangler tail",
     "migrate": "dotenv -e .env -- node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
     "migrate:down": "dotenv -e .env -- node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
     "hono": "^4.6.14",
+    "seedrandom": "^3.0.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
