@@ -59,7 +59,17 @@ if [ "$BACKEND" = "elevenlabs" ]; then
   : "${ELEVENLABS_API_KEY:?Set ELEVENLABS_API_KEY=sk_...}"
   : "${ELEVENLABS_VOICE_ID:?Set ELEVENLABS_VOICE_ID=... (20-char voice ID from dashboard)}"
   command -v jq >/dev/null || { echo "jq is required for elevenlabs backend"; exit 1; }
-  echo "→ Backend: ElevenLabs  voice=$ELEVENLABS_VOICE_ID  model=$ELEVENLABS_MODEL"
+
+  # Per-language voice override: prefer ELEVENLABS_VOICE_ID_<LANG_UPPER> when set.
+  # Falls back to ELEVENLABS_VOICE_ID (the default). See .env.example.
+  LANG_UPPER=$(echo "$LANG_CODE" | tr '[:lower:]' '[:upper:]')
+  LANG_VOICE_VAR="ELEVENLABS_VOICE_ID_${LANG_UPPER}"
+  LANG_VOICE_VAL="${!LANG_VOICE_VAR:-}"
+  if [ -n "$LANG_VOICE_VAL" ]; then
+    ELEVENLABS_VOICE_ID="$LANG_VOICE_VAL"
+    echo "→ Using per-language voice override ($LANG_VOICE_VAR)"
+  fi
+  echo "→ Backend: ElevenLabs  voice=$ELEVENLABS_VOICE_ID  lang=$LANG_CODE  model=$ELEVENLABS_MODEL"
 else
   command -v say >/dev/null || { echo "macOS 'say' not available; try BACKEND=elevenlabs"; exit 1; }
   echo "→ Backend: say  voice=$VOICE  rate=$RATE"
