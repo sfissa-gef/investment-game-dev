@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-# Generate English narration MP3s for the 10 instruction + insurance videos.
+# Generate narration MP3s for the 10 instruction + insurance videos, any language.
+#
+# Narration text is loaded from:
+#   scripts/narration-texts/<LANG_CODE>.json
 #
 # Two backends:
-#   BACKEND=say         (default)  macOS `say` + ffmpeg. Free, offline, robotic.
-#   BACKEND=elevenlabs             High-quality neural TTS. Needs API key.
+#   BACKEND=say         (default)  macOS `say` + ffmpeg. Free, offline, robotic. EN only.
+#   BACKEND=elevenlabs             High-quality neural TTS. Needs API key. Any language.
 #
 # Usage examples:
-#   ./scripts/generate-narration.sh
-#   BACKEND=elevenlabs ELEVENLABS_API_KEY=sk_... ELEVENLABS_VOICE_ID=... ./scripts/generate-narration.sh
+#   ./scripts/generate-narration.sh                                      # EN, say
+#   BACKEND=elevenlabs ./scripts/generate-narration.sh                   # EN, ElevenLabs
+#   LANG_CODE=lg BACKEND=elevenlabs ./scripts/generate-narration.sh      # Luganda, ElevenLabs
 #
-# Never commit your API key. Pass it as env var only.
+# Secrets: set ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID in .env.local (gitignored).
+# For per-language voice override, set ELEVENLABS_VOICE_ID_<LANG_UPPER>. See .env.example.
 
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TEXTS_DIR="$PROJECT_ROOT/scripts/narration-texts"
+
 # Load secrets from .env.local if present (gitignored). Never echo their values.
 if [ -f "$PROJECT_ROOT/.env.local" ]; then
   set -a
@@ -24,26 +31,39 @@ fi
 
 LANG_CODE="${LANG_CODE:-en}"
 OUT_DIR="$PROJECT_ROOT/public/audio/$LANG_CODE/videos"
-mkdir -p "$OUT_DIR"
+TEXTS_FILE="$TEXTS_DIR/$LANG_CODE.json"
 
-if [ "$LANG_CODE" != "en" ]; then
+command -v jq >/dev/null || { echo "jq is required"; exit 1; }
+
+if [ ! -f "$TEXTS_FILE" ]; then
   cat <<EOF >&2
-⚠️  LANG_CODE=$LANG_CODE
+⚠️  No narration text file found for LANG_CODE=$LANG_CODE
 
-This script currently ships with English narration text only. For a non-English
-language to work:
-  1. A native speaker must translate every narration string in this script.
-  2. Save a copy of this script (e.g. generate-narration-$LANG_CODE.sh) with the
-     translated text OR extract texts into scripts/narration-texts/$LANG_CODE.json.
-  3. ElevenLabs Mapendo voice supports multilingual TTS (eleven_multilingual_v2)
-     so the same voice_id can read translated text.
+Expected: $TEXTS_FILE
 
-See docs/TRANSLATION_TODO.md for the full workflow.
+To add a new language:
+  1. cp $TEXTS_DIR/en.json $TEXTS_FILE
+  2. Commission native-speaker translations (see docs/project/TRANSLATION_TODO.md)
+  3. Replace each scene's text with the translation, removing [NEEDS_TRANSLATION] markers
+  4. Re-run this script
 
-Aborting — cannot generate $LANG_CODE audio from English source text.
 EOF
   exit 2
 fi
+
+# Refuse to generate audio for untranslated content — prevents shipping wrong-language MP3s.
+UNTRANSLATED=$(jq -r 'to_entries[] | select(.key != "_meta") | select(.value | contains("[NEEDS_TRANSLATION]")) | .key' "$TEXTS_FILE")
+if [ -n "$UNTRANSLATED" ]; then
+  echo "✗ $TEXTS_FILE still contains [NEEDS_TRANSLATION] markers in these scenes:" >&2
+  echo "$UNTRANSLATED" | sed 's/^/    /' >&2
+  echo "" >&2
+  echo "Refusing to generate audio — would ship English-in-$LANG_CODE-clothing." >&2
+  echo "See docs/project/TRANSLATION_TODO.md for the translation workflow." >&2
+  exit 3
+fi
+
+mkdir -p "$OUT_DIR"
+
 TMP=$(mktemp -d)
 trap "rm -rf $TMP" EXIT
 
@@ -58,7 +78,6 @@ ELEVENLABS_SIMILARITY="${ELEVENLABS_SIMILARITY:-0.75}"
 if [ "$BACKEND" = "elevenlabs" ]; then
   : "${ELEVENLABS_API_KEY:?Set ELEVENLABS_API_KEY=sk_...}"
   : "${ELEVENLABS_VOICE_ID:?Set ELEVENLABS_VOICE_ID=... (20-char voice ID from dashboard)}"
-  command -v jq >/dev/null || { echo "jq is required for elevenlabs backend"; exit 1; }
 
   # Per-language voice override: prefer ELEVENLABS_VOICE_ID_<LANG_UPPER> when set.
   # Falls back to ELEVENLABS_VOICE_ID (the default). See .env.example.
@@ -71,6 +90,10 @@ if [ "$BACKEND" = "elevenlabs" ]; then
   fi
   echo "→ Backend: ElevenLabs  voice=$ELEVENLABS_VOICE_ID  lang=$LANG_CODE  model=$ELEVENLABS_MODEL"
 else
+  if [ "$LANG_CODE" != "en" ]; then
+    echo "✗ BACKEND=say only supports English. Use BACKEND=elevenlabs for $LANG_CODE." >&2
+    exit 1
+  fi
   command -v say >/dev/null || { echo "macOS 'say' not available; try BACKEND=elevenlabs"; exit 1; }
   echo "→ Backend: say  voice=$VOICE  rate=$RATE"
 fi
@@ -119,58 +142,12 @@ gen () {
   fi
 }
 
-# Narration scripts — keep in sync with scene caption text.
-gen A1 "Welcome to the farming game. You will play three seasons. \
-The first season is just for practice. It does not count. \
-The next two seasons are real. \
-The tokens you earn in those seasons will be converted to real money that you take home today."
-
-gen A2 "Your harvest depends on the rains. \
-Most seasons, four out of five, there will be good rains, and your crops will grow well. \
-But sometimes, one out of five, there is bad rain, a drought, and your crops fail. \
-You cannot predict which season will have bad rain. It is random, just like real weather."
-
-gen A3 "Each season, you receive twenty five tokens. These are your budget. \
-You can use tokens to buy farming inputs. Any tokens you do not spend are saved, they stay in your lockbox. \
-Each season you get twenty five fresh tokens. \
-They do not carry over from one season to the next."
-
-gen A4 "You can buy fertilizer for your farm. Each bag of fertilizer costs one token. \
-If the rains are good, each bag gives you two tokens back. Double your investment. \
-If you buy all ten bags, and the rains are good, you will get twenty tokens as your harvest."
-
-gen A5 "But if the rains are bad, your crops fail. \
-No matter how much fertilizer you bought, you get zero tokens back from your harvest. \
-However, the tokens you did not spend, the tokens in your lockbox, are still yours. \
-They are safe."
-
-gen A6 "Here is how to play. \
-Your tokens start in the lockbox, on the left. This number shows how many tokens you have. \
-Press the plus button to buy fertilizer. Your lockbox will update automatically. \
-When you are finished, press the green plant button. \
-Be careful. Once you press it, you cannot change your mind."
-
-gen A7A "You have one more season to play. This round counts for your payment, just like Round one. \
-But in this round, your decision is a little more complicated. You can still buy fertilizer. \
-But now you can also buy improved seeds, and you can also buy insurance for those seeds if you'd like. \
-The improved seeds cost ten tokens. If the rain is good, they pay back thirty tokens, in addition to any tokens from fertilizer. If the rain is bad, they pay nothing, the crop fails. \
-Insurance costs two tokens more. It helps you recoup the cost of your seeds if the rain is bad."
-
-gen A7B "You have one more season to play. This round counts for your payment, just like Round one. \
-But in this round, your decision is a little more complicated. You can still buy fertilizer. \
-But now you can also buy improved seeds to plant instead of local seeds. \
-The improved seeds cost twelve tokens. If the rain is good, they pay back thirty tokens, in addition to any tokens from fertilizer. If the rain is bad, the seeds themselves pay nothing, the crop fails. \
-But the improved seeds already include insurance as part of the price, to help you recoup the seed cost if the rain is bad."
-
-gen B1 "Seeds cost ten tokens. Insurance costs two tokens more, twelve tokens total. \
-If there is good rain, seeds earn you thirty tokens. Insurance pays nothing. \
-If there is bad rain, seeds earn you nothing, your crop fails. But insurance pays you back ten tokens, covering the cost of your seeds. \
-Either way, you are not left with nothing."
-
-gen B2 "The improved seeds cost twelve tokens. This price includes insurance, ten tokens for the seeds and two tokens for the insurance. \
-If there is good rain, you earn thirty tokens. The insurance pays nothing. \
-If there is bad rain, your crop fails. But the insurance pays you back ten tokens, covering the seed cost. \
-Either way, you get something back."
+# Iterate every non-_meta key in the texts file and generate audio.
+SCENE_IDS=$(jq -r 'to_entries[] | select(.key != "_meta") | .key' "$TEXTS_FILE")
+for id in $SCENE_IDS; do
+  text=$(jq -r --arg k "$id" '.[$k]' "$TEXTS_FILE")
+  gen "$id" "$text"
+done
 
 echo "✓ Done. Files in $OUT_DIR"
 ls -la "$OUT_DIR"

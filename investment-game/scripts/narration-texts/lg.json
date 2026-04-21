@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "language": "lg",
+    "languageName": "Luganda",
+    "voice": "TBD — will use default (Mapendo) via eleven_multilingual_v2 unless ELEVENLABS_VOICE_ID_LG is set",
+    "status": "template",
+    "notes": "TEMPLATE ONLY — values below must be replaced with native-speaker translations before audio can be generated. The narration script refuses to run on any scene whose value contains the [NEEDS_TRANSLATION] marker. See docs/project/TRANSLATION_TODO.md for the workflow and acceptance criteria.",
+    "workflow": [
+      "1. Commission native Luganda speaker(s) to translate each scene A1..B2 below.",
+      "2. Translator replaces the placeholder string (keep [NEEDS_TRANSLATION] markers removed) with the Luganda rendering.",
+      "3. Second native speaker reviews for accuracy + field-appropriate register (rural Ugandan farmers, not urban Kampala).",
+      "4. PI signs off on the final text.",
+      "5. Paste finalized text into this file; remove the _meta.status='template' flag (set to 'production').",
+      "6. Run: LANG_CODE=lg BACKEND=elevenlabs ./scripts/generate-narration.sh",
+      "7. Native speaker listens to generated audio; iterate on voice selection if pronunciation is off (see ELEVENLABS_VOICE_ID_LG in .env.example)."
+    ]
+  },
+  "A1": "[NEEDS_TRANSLATION] Welcome to the farming game. You will play three seasons...",
+  "A2": "[NEEDS_TRANSLATION] Your harvest depends on the rains...",
+  "A3": "[NEEDS_TRANSLATION] Each season, you receive twenty five tokens...",
+  "A4": "[NEEDS_TRANSLATION] You can buy fertilizer for your farm...",
+  "A5": "[NEEDS_TRANSLATION] But if the rains are bad, your crops fail...",
+  "A6": "[NEEDS_TRANSLATION] Here is how to play. Your tokens start in the lockbox...",
+  "A7A": "[NEEDS_TRANSLATION] You have one more season to play (Version A — seeds + optional insurance)...",
+  "A7B": "[NEEDS_TRANSLATION] You have one more season to play (Version B — seeds bundled with insurance)...",
+  "B1": "[NEEDS_TRANSLATION] Seeds cost ten tokens. Insurance costs two tokens more...",
+  "B2": "[NEEDS_TRANSLATION] The improved seeds cost twelve tokens. This price includes insurance..."
+}
