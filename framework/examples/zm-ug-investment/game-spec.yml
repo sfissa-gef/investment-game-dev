@@ -1,0 +1,143 @@
+# Zambia/Uganda Seed × Insurance Bundle Study
+#
+# This spec encodes the currently-deployed investment-game as a declarative
+# config. It is the reference example the schema validates against and the
+# target the future runtime port must render identically.
+#
+# Source of truth for any discrepancy: docs/research/game_logic.md + the
+# existing investment-game/src/lib/ code. Changes to payouts, probabilities,
+# or round structure require PI + IRB sign-off (see CONTRIBUTING.md).
+
+apiVersion: game-spec/v1
+
+metadata:
+  studyId: zm-ug-investment
+  name: "Seed × Insurance Bundle Study (Zambia & Uganda)"
+  countries: [UG, ZM]
+  languages: [en, lg, bem]
+  defaultLanguage: en
+
+constants:
+  budgetPerRound: 25
+  videoCost: 1                # tokens deducted if participant watches the insurance explainer
+  minSavingsPracticeR1: 15    # informational; enforced by fertilizer.max + budget
+
+resources:
+  fertilizer:
+    kind: stepper
+    min: 0
+    max: 10
+    pricePerUnit: 1
+  seeds:
+    kind: toggle
+    price: 10
+  insurance:
+    kind: toggle
+    price: 2
+    requires: [seeds]          # V-A insurance gate: cannot buy insurance without seeds
+  bundle:
+    kind: toggle
+    price: 12                  # seeds + insurance packaged, V-B only
+
+weather:
+  outcomes: [good, bad]
+  probabilities: { good: 0.80, bad: 0.20 }
+  seedPerRound: true           # fresh seedrandom seed per round; deterministic and logged
+
+# Reusable payout formulas — referenced by name in per-round payout blocks.
+# Expression grammar: arithmetic (+-*/), comparison (==, <, >, <=, >=), ternary,
+# field access (dotted paths). No loops, no function definitions.
+payoutFormulas:
+  fertilizerHarvest: "fertilizer * (weather == 'good' ? 2 : 0)"
+  seedHarvest:       "seeds ? (weather == 'good' ? 30 : 0) : 0"
+  insurancePayout:   "insurance ? (weather == 'good' ? 0 : 10) : 0"
+  bundleHarvest:     "bundle ? (weather == 'good' ? 30 : 10) : 0"
+
+rounds:
+  - id: practice
+    countsTowardPayment: false
+    decisions: [fertilizer]
+    payouts:
+      savings:           "budgetPerRound - fertilizer"
+      fertilizerHarvest: "fertilizerHarvest"
+      totalTokens:       "savings + fertilizerHarvest"
+
+  - id: round1
+    countsTowardPayment: true
+    decisions: [fertilizer]
+    payouts:
+      savings:           "budgetPerRound - fertilizer"
+      fertilizerHarvest: "fertilizerHarvest"
+      totalTokens:       "savings + fertilizerHarvest"
+
+  - id: round2
+    countsTowardPayment: true
+    versions:
+      - id: A
+        assignmentHash: { op: "<",  threshold: 0.5 }
+        decisions: [fertilizer, seeds, insurance]
+        payouts:
+          effectiveBudget:   "budgetPerRound - (videoChosen ? videoCost : 0)"
+          savings:           "effectiveBudget - fertilizer - (seeds ? 10 : 0) - (insurance ? 2 : 0)"
+          fertilizerHarvest: "fertilizerHarvest"
+          seedHarvest:       "seedHarvest"
+          insurancePayout:   "insurancePayout"
+          totalTokens:       "savings + fertilizerHarvest + seedHarvest + insurancePayout"
+      - id: B
+        assignmentHash: { op: ">=", threshold: 0.5 }
+        decisions: [fertilizer, bundle]
+        payouts:
+          effectiveBudget:   "budgetPerRound - (videoChosen ? videoCost : 0)"
+          savings:           "effectiveBudget - fertilizer - (bundle ? 12 : 0)"
+          fertilizerHarvest: "fertilizerHarvest"
+          bundleHarvest:     "bundleHarvest"
+          totalTokens:       "savings + fertilizerHarvest + bundleHarvest"
+
+instructions:
+  sequence: [A1, A2, A3, A4, A5, A6]
+  perRound:
+    round2:
+      A: [A7A]
+      B: [A7B]
+
+videoOffer:
+  enabled: true
+  cost: 1
+  narrationByVersion:
+    A: B1
+    B: B2
+
+survey:
+  questions:
+    - id: age
+      type: numeric
+      required: true
+      prompt: "age.prompt"
+    - id: gender
+      type: single-choice
+      required: true
+      prompt: "gender.prompt"
+      options: [female, male, other, prefer_not_to_say]
+    - id: education
+      type: single-choice
+      required: false
+      prompt: "education.prompt"
+      options: [none, primary, secondary, post_secondary]
+    - id: prior_insurance
+      type: single-choice
+      required: false
+      prompt: "prior_insurance.prompt"
+      options: [yes, no, unsure]
+
+branding:
+  primaryColor: "#2d7a46"
+  logo: "public/logo.svg"
+
+narrationDir: "../../investment-game/scripts/narration-texts"
+i18nDir:      "../../investment-game/src/i18n"
+
+# Informational: things the spec cannot configure. Enforced by the runtime.
+locked:
+  eventSchema: "docs/research/data_schema.md#event-log"
+  sessionPayloadSchema: "investment-game-server/src/schemas.js"
+  dbMigrations: "investment-game-server/migrations/"
