@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { getDb } from './db.js';
 import { requireEnumerator, requireAdmin } from './auth.js';
 import { SessionSchema, AudioChunkSchema } from './schemas.js';
+import { runQa } from './qa.js';
 
 const app = new Hono();
 
@@ -47,18 +48,35 @@ app.post('/api/sessions', requireEnumerator(), async (c) => {
       return c.json({ error: 'duplicate', existing_receipt_id: String(existing[0].id) }, 409);
     }
 
+    // D4: per-session QA — recompute payouts + verify weather seeds, etc.
+    // Pure function; never throws on untrusted input (returns structured flags).
+    let qa;
+    try {
+      qa = runQa(s);
+    } catch (qaErr) {
+      console.error('qa_run_failed', qaErr);
+      qa = { passed: null, flags: [{ check: 'qa_run_threw', error: String(qaErr) }], checkedAt: new Date().toISOString() };
+    }
+
     const inserted = await sql`
       INSERT INTO sessions
         (session_id, participant_id, enumerator_id, country, partner, round2_version,
-         language, currency_rate, app_version, session_start_time, session_end_time, payload)
+         language, currency_rate, app_version, session_start_time, session_end_time,
+         payload, qa_passed, qa_flags, qa_checked_at)
       VALUES
         (${s.sessionId}, ${s.participantId}, ${s.enumeratorId}, ${s.country},
          ${s.partner ?? null}, ${s.round2Version}, ${s.language}, ${s.currencyRate},
          ${s.appVersion ?? null}, ${s.sessionStartTime}, ${s.sessionEndTime ?? null},
-         ${JSON.stringify(s)})
+         ${JSON.stringify(s)},
+         ${qa.passed}, ${JSON.stringify(qa.flags)}, ${qa.checkedAt})
       RETURNING id
     `;
-    return c.json({ status: 'accepted', receipt_id: String(inserted[0].id) });
+    return c.json({
+      status: 'accepted',
+      receipt_id: String(inserted[0].id),
+      qa_passed: qa.passed,
+      qa_flag_count: qa.flags.length,
+    });
   } catch (err) {
     console.error('session_insert_failed', err);
     return c.json({ error: 'server_error' }, 500);
@@ -111,13 +129,34 @@ app.get('/api/sessions/:id', requireAdmin(), async (c) => {
 
 app.get('/api/sessions', requireAdmin(), async (c) => {
   const sql = getDb(c.env);
-  const rows = await sql`
-    SELECT session_id, participant_id, country, round2_version,
-           session_start_time, session_end_time, received_at
-    FROM sessions
-    ORDER BY received_at DESC
-    LIMIT 500
-  `;
+  // ?qa=failed → only sessions with qa_passed = false. ?qa=passed → only true.
+  const qa = c.req.query('qa');
+  let rows;
+  if (qa === 'failed') {
+    rows = await sql`
+      SELECT session_id, participant_id, country, round2_version,
+             session_start_time, session_end_time, received_at,
+             qa_passed, qa_flags
+      FROM sessions WHERE qa_passed = false
+      ORDER BY received_at DESC LIMIT 500
+    `;
+  } else if (qa === 'passed') {
+    rows = await sql`
+      SELECT session_id, participant_id, country, round2_version,
+             session_start_time, session_end_time, received_at,
+             qa_passed, qa_flags
+      FROM sessions WHERE qa_passed = true
+      ORDER BY received_at DESC LIMIT 500
+    `;
+  } else {
+    rows = await sql`
+      SELECT session_id, participant_id, country, round2_version,
+             session_start_time, session_end_time, received_at,
+             qa_passed, qa_flags
+      FROM sessions
+      ORDER BY received_at DESC LIMIT 500
+    `;
+  }
   return c.json(rows);
 });
 

@@ -26,20 +26,23 @@ Keys to leave in English (enumerator-only):
 
 One MP3 per video, named `A1.mp3 … A7B.mp3, B1.mp3, B2.mp3`. Missing files cause the VideoPlayer to fall back to English narration automatically (a `video_narration_fallback` event is logged so we can see in analytics which videos weren't localized).
 
-**Production workflow (recommended):**
-1. Native-speaker translator writes the narration text per video in a new file, e.g. `scripts/narration-texts/lg.json`:
-   ```json
-   {
-     "A1": "Tukusanyukidde ku muzannyo gw'okusuubira. ...",
-     "A2": "...",
-     "B2": "..."
-   }
-   ```
-2. Create a variant generation script `scripts/generate-narration-lg.sh` (copy of `generate-narration.sh`) that reads from that JSON and passes each entry to ElevenLabs.
-3. The existing Mapendo voice (`dOqxOZEisn8SiUH1dPCC`) speaks Luganda and Bemba natively because we use the `eleven_multilingual_v2` model. No new voice needed — the same performer carries across languages.
-4. Run with `LANG_CODE=lg ELEVENLABS_API_KEY=... ./scripts/generate-narration-lg.sh`.
+**Production workflow (as of dev branch, 2026-04-21):**
 
-**Alternative (higher quality):** hire a voice actor native to the target language. Deliver MP3s named as above into the matching folder. Same filenames → drop-in.
+1. The English source text lives at `investment-game/scripts/narration-texts/en.json`. Keys: `A1, A2, A3, A4, A5, A6, A7A, A7B, B1, B2`.
+2. A Luganda template already exists at `investment-game/scripts/narration-texts/lg.json` with the same keys and placeholder values marked `[NEEDS_TRANSLATION]`.
+3. Native-speaker translator opens `lg.json`, replaces each placeholder with the Luganda rendering. Remove the `[NEEDS_TRANSLATION]` marker entirely.
+4. Second native speaker reviews for accuracy + field register (rural Ugandan farmers, not urban Kampala). Update `_meta.status` from `"template"` to `"production"` when both reviews pass.
+5. PI signs off on final text (research-integrity gate).
+6. Run `LANG_CODE=lg BACKEND=elevenlabs ./scripts/generate-narration.sh` from `investment-game/`. The script:
+   - Refuses to run if any scene still contains `[NEEDS_TRANSLATION]` (safety against shipping wrong-language audio)
+   - Uses Mapendo voice by default (eleven_multilingual_v2 supports Luganda natively)
+   - Can use a different voice per language if `ELEVENLABS_VOICE_ID_LG` is set in `.env.local` — see `.env.example`
+7. Native speaker listens to generated MP3s; iterate on voice choice if pronunciation needs work (this is D2 territory in [ROADMAP_DEV.md](ROADMAP_DEV.md)).
+8. Generated files land in `public/audio/lg/videos/` and ship with the next build.
+
+**Same workflow applies to Bemba** — `cp lg.json bem.json`, set `_meta.language="bem"`, translator fills in.
+
+**Alternative (higher quality):** hire a native voice actor and deliver MP3s with the correct filenames directly into `public/audio/<lang>/videos/`. Bypasses ElevenLabs entirely.
 
 ## Character budget
 

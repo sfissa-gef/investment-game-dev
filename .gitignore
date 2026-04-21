@@ -52,3 +52,10 @@ pnpm-debug.log*
 # Coverage
 coverage/
 *.lcov
+
+# Analysis pipeline — NEVER commit raw or de-identified participant data
+data/
+analysis/output/
+**/.Rproj.user/
+**/.Rhistory
+**/.RData
